@@ -2,13 +2,15 @@
 
 Use any LiteLLM model in Raycast AI without a subscription.
 
+Fork of [d-cu/raycast-ai-litellm-proxy](https://github.com/d-cu/raycast-ai-litellm-proxy) with pre-built images published to [GitHub Container Registry](https://github.com/henryxrl/raycast-ai-litellm-proxy/pkgs/container/raycast-ai-litellm-proxy).
+
 ## Quick Start
 
 **Prerequisites**: Docker + running LiteLLM server
 
 1. **Clone and setup**:
    ```bash
-   git clone https://github.com/d-cu/raycast-ai-litellm-proxy.git
+   git clone https://github.com/henryxrl/raycast-ai-litellm-proxy.git
    cd raycast-ai-litellm-proxy
    cp .env.example .env
    ```
@@ -24,9 +26,20 @@ Use any LiteLLM model in Raycast AI without a subscription.
    > BASE_URL=http://192.168.1.X:4000/v1  # Replace X with your IP
    > ```
 
-3. **Start proxy**:
+3. **Start proxy** (pulls pre-built image from GHCR):
    ```bash
+   docker compose pull
    docker compose up -d
+   ```
+
+   Or run without cloning — create a `.env` file and use the image directly:
+   ```bash
+   docker run -d --name raycast-ai-proxy \
+     --restart unless-stopped \
+     -p 11435:3000 \
+     --add-host host.docker.internal:host-gateway \
+     --env-file .env \
+     ghcr.io/henryxrl/raycast-ai-litellm-proxy:latest
    ```
 
 4. **Configure Raycast**:
@@ -42,13 +55,25 @@ Use any LiteLLM model in Raycast AI without a subscription.
 
 **Done!** Your LiteLLM models now appear in Raycast AI.
 
+## Development
+
+To build and run from source instead of the published image:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build
+```
+
+Pushes to `main` that touch `Dockerfile`, `src/`, or dependencies automatically build and publish `ghcr.io/henryxrl/raycast-ai-litellm-proxy:latest` via GitHub Actions.
+
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
+| `pull access denied` or auth errors | Log in: `docker login ghcr.io` — or set the [GHCR package](https://github.com/henryxrl/raycast-ai-litellm-proxy/pkgs/container/raycast-ai-litellm-proxy) to **Public** |
 | Only see fallback models | Replace `host.docker.internal` with your IP in `.env` |
 | Connection refused | Use `BASE_URL=http://192.168.1.X:4000/v1` |
 | No models appear | Verify `API_KEY` and restart: `docker compose restart` |
+| Stale image after updates | `docker compose pull && docker compose up -d` |
 
 ## Configuration
 

@@ -3,7 +3,17 @@ name: Build Docker image
 on:
   push:
     branches: ["main"]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "package*.json"
+      - "src/**"
+      - "tsconfig.json"
   workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -28,6 +38,8 @@ jobs:
         with:
           context: .
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
-            ghcr.io/henryxrl/raycast-ai-litellm-proxy:latest
-            ghcr.io/henryxrl/raycast-ai-litellm-proxy:${{ github.sha }}
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.sha }}

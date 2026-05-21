@@ -17,3 +17,12 @@ npm-debug.log*
 
 # Claude Code files
 .claude/
+
+# Cursor Code files
+.cursorindexingignore
+
+# .specstory — track only history/*.md (cannot negate inside an ignored directory)
+.specstory/*
+# !.specstory/history/
+# .specstory/history/*
+# !.specstory/history/*.md

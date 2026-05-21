@@ -1,7 +1,7 @@
 services:
   raycast-ai-proxy:
     restart: unless-stopped
-    image: ghcr.io/henryxrl/raycast-ai-litellm-proxy:latest
+    build: .
     # The proxy runs on port 3000 inside the container.
     # Change the host port if needed.
     # You need to set this port in Raycast settings.
