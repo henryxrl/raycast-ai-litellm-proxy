@@ -77,9 +77,7 @@ let cacheUpdatePromise: Promise<ModelConfig[]> | null = null;
 
 import {
   detectCapabilitiesFromLiteLLM,
-  detectCapabilitiesFromProvider,
   getModelCapabilities,
-  mergeCapabilities,
 } from './capability-detection';
 import { getModelContextLength } from './context-length';
 
@@ -106,10 +104,7 @@ function convertDetailedLiteLLMToModelConfig(response: unknown): ModelConfig[] {
         modelInfo?.max_input_tokens ||
         getModelMetadata(model.model_name).contextLength;
 
-      const capabilities = mergeCapabilities(
-        detectCapabilitiesFromLiteLLM(modelInfo),
-        detectCapabilitiesFromProvider(model.model_name, modelInfo?.litellm_provider),
-      );
+      const capabilities = detectCapabilitiesFromLiteLLM(modelInfo);
 
       return {
         name: model.model_name,
@@ -148,72 +143,114 @@ function convertLiteLLMToModelConfig(litellmModels: z.infer<typeof LiteLLMModel>
   });
 }
 
-async function fetchModelsFromLiteLLM(baseUrl: string, apiKey?: string): Promise<ModelConfig[]> {
-  // Try the detailed model/info endpoint first, fall back to basic /models
-  const modelInfoUrl = new URL('/model/info', baseUrl).toString();
-  const modelsUrl = new URL('/models', baseUrl).toString();
+function buildLiteLLMHeaders(apiKey?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
 
-  // First try to get detailed model info
-  try {
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-    };
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
 
-    // Add Authorization header if API key is provided
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
+  return headers;
+}
+
+function resolveLiteLLMUrls(baseUrl: string, paths: string[]): string[] {
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  const urls = new Set<string>();
+
+  for (const path of paths) {
+    urls.add(path.startsWith('/') ? new URL(path, baseUrl).toString() : new URL(path, normalizedBase).toString());
+  }
+
+  return [...urls];
+}
+
+async function fetchLiteLLMModelInfo(
+  baseUrl: string,
+  apiKey?: string,
+): Promise<unknown | null> {
+  const headers = buildLiteLLMHeaders(apiKey);
+  const modelInfoUrls = resolveLiteLLMUrls(baseUrl, ['/v1/model/info', '/model/info']);
+
+  for (const modelInfoUrl of modelInfoUrls) {
+    try {
+      const response = await fetch(modelInfoUrl, {
+        method: 'GET',
+        headers,
+      });
+
+      if (response.ok) {
+        const data: unknown = await response.json();
+        const modelCount = Array.isArray((data as { data?: unknown })?.data)
+          ? (data as { data: unknown[] }).data.length
+          : 0;
+        console.log(
+          `Using LiteLLM model metadata from ${modelInfoUrl} for ${modelCount} models`,
+        );
+        return data;
+      }
+
+      if (response.status === 403) {
+        console.log(
+          `Cannot access ${modelInfoUrl} (HTTP 403); falling back to name-based capability detection`,
+        );
+      } else {
+        console.log(`Model info unavailable at ${modelInfoUrl} (HTTP ${response.status})`);
+      }
+    } catch (_error) {
+      console.log(`Model info endpoint not available at ${modelInfoUrl}, trying next URL`);
     }
+  }
 
-    const response = await fetch(modelInfoUrl, {
-      method: 'GET',
-      headers,
-    });
+  return null;
+}
 
-    if (response.ok) {
+async function fetchLiteLLMModelsList(
+  baseUrl: string,
+  apiKey?: string,
+): Promise<z.infer<typeof LiteLLMModel>[]> {
+  const headers = buildLiteLLMHeaders(apiKey);
+  const modelsUrls = resolveLiteLLMUrls(baseUrl, ['models', '/v1/models', '/models']);
+  let lastError: Error | undefined;
+
+  for (const modelsUrl of modelsUrls) {
+    try {
+      const response = await fetch(modelsUrl, {
+        method: 'GET',
+        headers,
+      });
+
+      if (!response.ok) {
+        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        continue;
+      }
+
       const data: unknown = await response.json();
       const modelCount = Array.isArray((data as { data?: unknown })?.data)
         ? (data as { data: unknown[] }).data.length
         : 0;
-      console.log(`Successfully fetched detailed model info for ${modelCount} models`);
-      // If we get detailed info, use it
-      return convertDetailedLiteLLMToModelConfig(data);
+      console.log(`Using basic model list from ${modelsUrl}, found ${modelCount} models`);
+      const parsedResponse = LiteLLMResponse.parse(data);
+      return parsedResponse.data;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
     }
-  } catch (_error) {
-    console.log('Model info endpoint not available, falling back to basic /models');
   }
 
-  // Fallback to basic /models endpoint
-  try {
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-    };
+  throw lastError ?? new Error('Failed to fetch models from LiteLLM');
+}
 
-    // Add Authorization header if API key is provided
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    }
+async function fetchModelsFromLiteLLM(baseUrl: string, apiKey?: string): Promise<ModelConfig[]> {
+  const modelInfo = await fetchLiteLLMModelInfo(baseUrl, apiKey);
 
-    const response = await fetch(modelsUrl, {
-      method: 'GET',
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data: unknown = await response.json();
-    const modelCount = Array.isArray((data as { data?: unknown })?.data)
-      ? (data as { data: unknown[] }).data.length
-      : 0;
-    console.log(`Fallback to basic /models endpoint, found ${modelCount} models`);
-    const parsedResponse = LiteLLMResponse.parse(data);
-
-    return convertLiteLLMToModelConfig(parsedResponse.data);
-  } catch (error) {
-    console.warn('Failed to fetch models from LiteLLM:', error);
-    throw error;
+  if (modelInfo) {
+    return convertDetailedLiteLLMToModelConfig(modelInfo);
   }
+
+  console.log('LiteLLM /model/info unavailable; using name-based capability detection');
+  const litellmModels = await fetchLiteLLMModelsList(baseUrl, apiKey);
+  return convertLiteLLMToModelConfig(litellmModels);
 }
 
 function getFallbackModels(): ModelConfig[] {

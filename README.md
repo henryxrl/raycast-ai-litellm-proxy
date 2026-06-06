@@ -6,6 +6,12 @@ Fork of [d-cu/raycast-ai-litellm-proxy](https://github.com/d-cu/raycast-ai-litel
 
 ## Changelog
 
+### 0.0.3
+
+- Prefer LiteLLM `/model/info` metadata for vision detection when the proxy `API_KEY` can access it (`supports_vision: true`)
+- Fall back to name-based vision matching when `/model/info` is unavailable (e.g. virtual keys limited to `llm_api_routes`)
+- Try both `/v1/model/info` and `/model/info`, and resolve `/v1/models` correctly when `BASE_URL` ends with `/v1`
+
 ### 0.0.2
 
 - Improved vision capability detection so Raycast can enable image input for more LiteLLM models
@@ -32,7 +38,10 @@ Fork of [d-cu/raycast-ai-litellm-proxy](https://github.com/d-cu/raycast-ai-litel
    BASE_URL=http://host.docker.internal:4000/v1
    ```
 
+   > **Vision models**: For metadata-based vision detection, the proxy `API_KEY` must be able to call LiteLLM `/model/info`. Keys limited to `llm_api_routes` cannot access that endpoint; the proxy will fall back to name-based matching (e.g. model names containing `vision` or `-vl`).
+   >
    > **Common fix**: If `host.docker.internal` doesn't work, use your IP:
+   >
    > ```bash
    > BASE_URL=http://192.168.1.X:4000/v1  # Replace X with your IP
    > ```
@@ -81,13 +90,13 @@ Pushes to `main` that touch `Dockerfile`, `src/`, or dependencies automatically 
 ## Troubleshooting
 
 | Issue | Solution |
-|-------|----------|
+| ----- | -------- |
 | `pull access denied` or auth errors | Log in: `docker login ghcr.io` — or set the [GHCR package](https://github.com/henryxrl/raycast-ai-litellm-proxy/pkgs/container/raycast-ai-litellm-proxy) to **Public** |
 | Only see fallback models | Replace `host.docker.internal` with your IP in `.env` |
 | Connection refused | Use `BASE_URL=http://192.168.1.X:4000/v1` |
 | No models appear | Verify `API_KEY` and restart: `docker compose restart` |
 | Stale image after updates | `docker compose pull && docker compose up -d` |
-| Raycast won't accept images | Pull latest image, restart proxy, then **Sync Models** in Raycast. Verify with: `curl -s http://localhost:11435/api/show -H "Content-Type: application/json" -d '{"model":"YOUR_MODEL"}' \| jq '.capabilities'` — response should include `"vision"` |
+| Raycast won't accept images | Pull latest image, restart proxy, then **Sync Models** in Raycast. Verify with: `curl -s http://localhost:11435/api/show -H "Content-Type: application/json" -d '{"model":"YOUR_MODEL"}' \| jq '.capabilities'` — response should include `"vision"`. If using a restricted virtual key, either grant `/model/info` access or use a model name that includes `vision` / `-vl` |
 
 ## Configuration
 

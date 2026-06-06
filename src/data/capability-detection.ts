@@ -25,53 +25,14 @@ export function hasVisionCapability(modelId: string): boolean {
   return VISION_MODEL_PATTERNS.some((pattern) => pattern.test(modelId));
 }
 
-export function mergeCapabilities(
-  ...capabilityLists: ModelConfig['capabilities'][]
-): ModelConfig['capabilities'] {
-  const merged = new Set<ModelConfig['capabilities'][number]>();
-  for (const capabilities of capabilityLists) {
-    for (const capability of capabilities) {
-      merged.add(capability);
-    }
-  }
-  if (merged.size === 0) {
-    merged.add('tools');
-  }
-  return [...merged];
-}
-
 export function detectCapabilitiesFromLiteLLM(modelInfo?: {
   supports_function_calling?: boolean | null;
   supports_tool_choice?: boolean | null;
   supports_vision?: boolean | null;
 }): ModelConfig['capabilities'] {
-  const capabilities: ModelConfig['capabilities'] = [];
+  const capabilities: ModelConfig['capabilities'] = ['tools'];
 
-  // Use LiteLLM's actual capability flags (most reliable)
-  if (modelInfo) {
-    if (modelInfo.supports_function_calling === true || modelInfo.supports_tool_choice === true) {
-      capabilities.push('tools');
-    }
-    if (modelInfo.supports_vision === true) {
-      capabilities.push('vision');
-    }
-  }
-
-  // If we don't have any capabilities detected, default to tools for chat models
-  if (capabilities.length === 0) {
-    capabilities.push('tools');
-  }
-
-  return capabilities;
-}
-
-export function detectCapabilitiesFromProvider(
-  modelName: string,
-  _provider?: string,
-): ModelConfig['capabilities'] {
-  const capabilities: ModelConfig['capabilities'] = ['tools']; // Default for chat models
-
-  if (hasVisionCapability(modelName)) {
+  if (modelInfo?.supports_vision === true) {
     capabilities.push('vision');
   }
 
