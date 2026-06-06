@@ -44,20 +44,23 @@ const LiteLLMResponse = z.object({
 // Detailed model info response schema
 const DetailedModelInfo = z.object({
   model_name: z.string(),
-  litellm_params: z.object({
-    model: z.string(),
-  }),
+  litellm_params: z
+    .object({
+      model: z.string(),
+    })
+    .passthrough(),
   model_info: z
     .object({
-      max_tokens: z.number().optional(),
-      max_input_tokens: z.number().optional(),
-      max_output_tokens: z.number().optional(),
-      litellm_provider: z.string().optional(),
-      mode: z.string().optional(),
-      supports_vision: z.boolean().nullable().optional(),
-      supports_function_calling: z.boolean().nullable().optional(),
-      supports_tool_choice: z.boolean().nullable().optional(),
+      max_tokens: z.number().nullish(),
+      max_input_tokens: z.number().nullish(),
+      max_output_tokens: z.number().nullish(),
+      litellm_provider: z.string().nullish(),
+      mode: z.string().nullish(),
+      supports_vision: z.boolean().nullish(),
+      supports_function_calling: z.boolean().nullish(),
+      supports_tool_choice: z.boolean().nullish(),
     })
+    .passthrough()
     .optional(),
 });
 
@@ -92,42 +95,76 @@ function getModelMetadata(modelId: string): {
 }
 
 function convertDetailedLiteLLMToModelConfig(response: unknown): ModelConfig[] {
-  try {
-    const parsedResponse = DetailedLiteLLMResponse.parse(response);
+  const parsed = DetailedLiteLLMResponse.safeParse(response);
 
-    return parsedResponse.data.map((model) => {
-      const modelInfo = model.model_info;
-
-      // Use LiteLLM's context length if available, otherwise fall back to our detection
-      const contextLength =
-        modelInfo?.max_tokens ||
-        modelInfo?.max_input_tokens ||
-        getModelMetadata(model.model_name).contextLength;
-
-      const capabilities = detectCapabilitiesFromLiteLLM(modelInfo);
-
-      return {
-        name: model.model_name,
-        id: model.litellm_params.model,
-        contextLength,
-        capabilities,
-      };
-    });
-  } catch (error) {
-    console.warn('Failed to parse detailed model info, falling back to basic parsing');
-    // If parsing fails, treat as basic response
-    if (
-      typeof response === 'object' &&
-      response !== null &&
-      'data' in response &&
-      Array.isArray((response as { data: unknown }).data)
-    ) {
-      return convertLiteLLMToModelConfig(
-        (response as { data: z.infer<typeof LiteLLMModel>[] }).data,
-      );
-    }
-    throw error;
+  if (parsed.success) {
+    return parsed.data.data.map((model) => mapDetailedModelToConfig(model));
   }
+
+  console.warn('Failed to parse detailed model info, falling back to loose parsing');
+
+  if (
+    typeof response === 'object' &&
+    response !== null &&
+    'data' in response &&
+    Array.isArray((response as { data: unknown }).data)
+  ) {
+    return ((response as { data: unknown[] }).data as Record<string, unknown>[])
+      .map((model) => mapLooseDetailedModelToConfig(model))
+      .filter((model): model is ModelConfig => model !== null);
+  }
+
+  throw parsed.error;
+}
+
+function mapDetailedModelToConfig(model: z.infer<typeof DetailedModelInfo>): ModelConfig {
+  const modelInfo = model.model_info;
+
+  const contextLength =
+    modelInfo?.max_tokens ??
+    modelInfo?.max_input_tokens ??
+    getModelMetadata(model.model_name).contextLength;
+
+  return {
+    name: model.model_name,
+    id: model.litellm_params.model,
+    contextLength,
+    capabilities: detectCapabilitiesFromLiteLLM(modelInfo),
+  };
+}
+
+function mapLooseDetailedModelToConfig(model: Record<string, unknown>): ModelConfig | null {
+  const modelName = typeof model.model_name === 'string' ? model.model_name : undefined;
+  const litellmParams =
+    typeof model.litellm_params === 'object' && model.litellm_params !== null
+      ? (model.litellm_params as Record<string, unknown>)
+      : undefined;
+  const modelId = typeof litellmParams?.model === 'string' ? litellmParams.model : modelName;
+
+  if (!modelName || !modelId) {
+    return null;
+  }
+
+  const modelInfo =
+    typeof model.model_info === 'object' && model.model_info !== null
+      ? (model.model_info as {
+          max_tokens?: number | null;
+          max_input_tokens?: number | null;
+          supports_vision?: boolean | null;
+        })
+      : undefined;
+
+  const contextLength =
+    modelInfo?.max_tokens ??
+    modelInfo?.max_input_tokens ??
+    getModelMetadata(modelName).contextLength;
+
+  return {
+    name: modelName,
+    id: modelId,
+    contextLength,
+    capabilities: detectCapabilitiesFromLiteLLM(modelInfo),
+  };
 }
 
 function convertLiteLLMToModelConfig(litellmModels: z.infer<typeof LiteLLMModel>[]): ModelConfig[] {
