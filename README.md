@@ -4,11 +4,21 @@ Use any LiteLLM model in Raycast AI without a subscription.
 
 Fork of [d-cu/raycast-ai-litellm-proxy](https://github.com/d-cu/raycast-ai-litellm-proxy) with pre-built images published to [GitHub Container Registry](https://github.com/henryxrl/raycast-ai-litellm-proxy/pkgs/container/raycast-ai-litellm-proxy).
 
+## Changelog
+
+### 0.0.2
+
+- Improved vision capability detection so Raycast can enable image input for more LiteLLM models
+- Models whose names include `vision` or `-vl` (e.g. `qwen36-35b-mtp-vision`) are now reported with the `vision` capability via `/api/show`
+- Added broader name-based matching for common vision model families (Qwen-VL, DeepSeek-VL, Claude 4, Gemini, LLaVA, and others)
+- Merged LiteLLM capability flags with name-based detection instead of relying on a single source
+
 ## Quick Start
 
 **Prerequisites**: Docker + running LiteLLM server
 
 1. **Clone and setup**:
+
    ```bash
    git clone https://github.com/henryxrl/raycast-ai-litellm-proxy.git
    cd raycast-ai-litellm-proxy
@@ -16,23 +26,26 @@ Fork of [d-cu/raycast-ai-litellm-proxy](https://github.com/d-cu/raycast-ai-litel
    ```
 
 2. **Configure** (edit `.env`):
+
    ```bash
    API_KEY=your-litellm-api-key
    BASE_URL=http://host.docker.internal:4000/v1
    ```
-   
+
    > **Common fix**: If `host.docker.internal` doesn't work, use your IP:
    > ```bash
    > BASE_URL=http://192.168.1.X:4000/v1  # Replace X with your IP
    > ```
 
 3. **Start proxy** (pulls pre-built image from GHCR):
+
    ```bash
    docker compose pull
    docker compose up -d
    ```
 
    Or run without cloning — create a `.env` file and use the image directly:
+
    ```bash
    docker run -d --name raycast-ai-proxy \
      --restart unless-stopped \
@@ -43,13 +56,13 @@ Fork of [d-cu/raycast-ai-litellm-proxy](https://github.com/d-cu/raycast-ai-litel
    ```
 
 4. **Configure Raycast**:
-   
+
    In Raycast Settings → **AI**:
-   
+
    **Local Models section:**
    - Set **Ollama Host**: `localhost:11435`
    - Click **Sync Models** to discover your LiteLLM models
-   
+
    **Experiments section:**
    - Scroll down and enable **AI Extensions for Ollama Models**
 
@@ -74,6 +87,7 @@ Pushes to `main` that touch `Dockerfile`, `src/`, or dependencies automatically 
 | Connection refused | Use `BASE_URL=http://192.168.1.X:4000/v1` |
 | No models appear | Verify `API_KEY` and restart: `docker compose restart` |
 | Stale image after updates | `docker compose pull && docker compose up -d` |
+| Raycast won't accept images | Pull latest image, restart proxy, then **Sync Models** in Raycast. Verify with: `curl -s http://localhost:11435/api/show -H "Content-Type: application/json" -d '{"model":"YOUR_MODEL"}' \| jq '.capabilities'` — response should include `"vision"` |
 
 ## Configuration
 
