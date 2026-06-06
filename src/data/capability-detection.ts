@@ -25,6 +25,29 @@ export function hasVisionCapability(modelId: string): boolean {
   return VISION_MODEL_PATTERNS.some((pattern) => pattern.test(modelId));
 }
 
+// Embedding model patterns for fallback when LiteLLM /model/info is unavailable
+export const EMBEDDING_MODEL_PATTERNS = [
+  /embed/i,
+  /^bge-/i,
+  /text-embedding/i,
+  /nomic-embed/i,
+  /e5-/i,
+  /mxbai-embed/i,
+  /gte-/i,
+  /sentence-transformers/i,
+];
+
+export function isEmbeddingModel(
+  modelName: string,
+  modelInfo?: { mode?: string | null },
+): boolean {
+  if (modelInfo?.mode === 'embedding') {
+    return true;
+  }
+
+  return EMBEDDING_MODEL_PATTERNS.some((pattern) => pattern.test(modelName));
+}
+
 export function detectCapabilitiesFromLiteLLM(modelInfo?: {
   supports_function_calling?: boolean | null;
   supports_tool_choice?: boolean | null;

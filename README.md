@@ -6,6 +6,10 @@ Fork of [d-cu/raycast-ai-litellm-proxy](https://github.com/d-cu/raycast-ai-litel
 
 ## Changelog
 
+### 0.0.7
+
+- Add `EMBEDDING_MODEL_PATTERNS` for name-based embedding detection when `/model/info` is unavailable
+
 ### 0.0.6
 
 - Exclude LiteLLM embedding models from the Raycast model catalog (`mode: embedding`)

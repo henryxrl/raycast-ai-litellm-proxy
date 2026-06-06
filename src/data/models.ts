@@ -81,6 +81,7 @@ let cacheUpdatePromise: Promise<ModelConfig[]> | null = null;
 import {
   detectCapabilitiesFromLiteLLM,
   getModelCapabilities,
+  isEmbeddingModel,
 } from './capability-detection';
 import { getModelContextLength } from './context-length';
 
@@ -92,22 +93,6 @@ function getModelMetadata(modelId: string): {
   const capabilities = getModelCapabilities(modelId);
 
   return { contextLength, capabilities };
-}
-
-function isEmbeddingModel(
-  modelName: string,
-  modelInfo?: { mode?: string | null },
-): boolean {
-  if (modelInfo?.mode === 'embedding') {
-    return true;
-  }
-
-  const normalized = modelName.toLowerCase();
-  return (
-    normalized.includes('embed') ||
-    normalized.startsWith('bge-') ||
-    normalized.includes('text-embedding')
-  );
 }
 
 function convertDetailedLiteLLMToModelConfig(response: unknown): ModelConfig[] {
