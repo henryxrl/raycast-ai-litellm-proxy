@@ -94,11 +94,29 @@ function getModelMetadata(modelId: string): {
   return { contextLength, capabilities };
 }
 
+function isEmbeddingModel(
+  modelName: string,
+  modelInfo?: { mode?: string | null },
+): boolean {
+  if (modelInfo?.mode === 'embedding') {
+    return true;
+  }
+
+  const normalized = modelName.toLowerCase();
+  return (
+    normalized.includes('embed') ||
+    normalized.startsWith('bge-') ||
+    normalized.includes('text-embedding')
+  );
+}
+
 function convertDetailedLiteLLMToModelConfig(response: unknown): ModelConfig[] {
   const parsed = DetailedLiteLLMResponse.safeParse(response);
 
   if (parsed.success) {
-    return parsed.data.data.map((model) => mapDetailedModelToConfig(model));
+    return parsed.data.data
+      .map((model) => mapDetailedModelToConfig(model))
+      .filter((model): model is ModelConfig => model !== null);
   }
 
   console.warn('Failed to parse detailed model info, falling back to loose parsing');
@@ -117,8 +135,13 @@ function convertDetailedLiteLLMToModelConfig(response: unknown): ModelConfig[] {
   throw parsed.error;
 }
 
-function mapDetailedModelToConfig(model: z.infer<typeof DetailedModelInfo>): ModelConfig {
+function mapDetailedModelToConfig(model: z.infer<typeof DetailedModelInfo>): ModelConfig | null {
   const modelInfo = model.model_info;
+
+  if (isEmbeddingModel(model.model_name, modelInfo)) {
+    console.log(`Skipping embedding model not exposed to Raycast: ${model.model_name}`);
+    return null;
+  }
 
   const contextLength =
     modelInfo?.max_tokens ??
@@ -150,9 +173,15 @@ function mapLooseDetailedModelToConfig(model: Record<string, unknown>): ModelCon
       ? (model.model_info as {
           max_tokens?: number | null;
           max_input_tokens?: number | null;
+          mode?: string | null;
           supports_vision?: boolean | null;
         })
       : undefined;
+
+  if (isEmbeddingModel(modelName, modelInfo)) {
+    console.log(`Skipping embedding model not exposed to Raycast: ${modelName}`);
+    return null;
+  }
 
   const contextLength =
     modelInfo?.max_tokens ??
@@ -168,15 +197,22 @@ function mapLooseDetailedModelToConfig(model: Record<string, unknown>): ModelCon
 }
 
 function convertLiteLLMToModelConfig(litellmModels: z.infer<typeof LiteLLMModel>[]): ModelConfig[] {
-  return litellmModels.map((model) => {
+  return litellmModels.flatMap((model) => {
+    if (isEmbeddingModel(model.id)) {
+      console.log(`Skipping embedding model not exposed to Raycast: ${model.id}`);
+      return [];
+    }
+
     const { contextLength, capabilities } = getModelMetadata(model.id);
 
-    return {
-      name: model.id, // Use the model ID directly as the display name
-      id: model.id,
-      contextLength,
-      capabilities,
-    };
+    return [
+      {
+        name: model.id,
+        id: model.id,
+        contextLength,
+        capabilities,
+      },
+    ];
   });
 }
 
