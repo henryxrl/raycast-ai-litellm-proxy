@@ -290,6 +290,22 @@ async function fetchModelsFromLiteLLM(baseUrl: string, apiKey?: string): Promise
   return convertLiteLLMToModelConfig(litellmModels);
 }
 
+function formatRaycastModelSummary(model: ModelConfig) {
+  return {
+    name: model.name,
+    model: model.id,
+    contextLength: model.contextLength,
+    capabilities: ['completion', ...model.capabilities],
+  };
+}
+
+function logRaycastModelCatalog(models: ModelConfig[], source: string): void {
+  console.log(`Raycast model catalog (${source}, ${models.length} models):`);
+  for (const model of models) {
+    console.log(JSON.stringify(formatRaycastModelSummary(model)));
+  }
+}
+
 function getFallbackModels(): ModelConfig[] {
   // Better fallback with multiple commonly available models
   return [
@@ -371,6 +387,7 @@ async function updateModelCache(
     };
 
     console.log(`Successfully loaded ${models.length} models from LiteLLM`);
+    logRaycastModelCatalog(models, 'litellm');
     return models;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -388,12 +405,14 @@ async function updateModelCache(
     // If we have cached models, use them even if expired
     if (modelCache?.models) {
       console.log('Using expired cached models');
+      logRaycastModelCatalog(modelCache.models, 'cache');
       return modelCache.models;
     }
 
     // Last resort: use fallback models
     const fallbackModels = getFallbackModels();
     console.log('Using fallback models:', fallbackModels.map((m) => m.name).join(', '));
+    logRaycastModelCatalog(fallbackModels, 'fallback');
     return fallbackModels;
   }
 }

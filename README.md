@@ -6,6 +6,10 @@ Fork of [d-cu/raycast-ai-litellm-proxy](https://github.com/d-cu/raycast-ai-litel
 
 ## Changelog
 
+### 0.0.5
+
+- Log each Raycast-facing model summary on load (name, LiteLLM model id, context length, capabilities)
+
 ### 0.0.4
 
 - Fix parsing LiteLLM `/model/info` responses where numeric fields are `null`
