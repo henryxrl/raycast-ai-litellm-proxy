@@ -79,6 +79,7 @@ import {
   detectCapabilitiesFromLiteLLM,
   detectCapabilitiesFromProvider,
   getModelCapabilities,
+  mergeCapabilities,
 } from './capability-detection';
 import { getModelContextLength } from './context-length';
 
@@ -105,10 +106,10 @@ function convertDetailedLiteLLMToModelConfig(response: unknown): ModelConfig[] {
         modelInfo?.max_input_tokens ||
         getModelMetadata(model.model_name).contextLength;
 
-      // Use LiteLLM's capability flags (most reliable), with fallback to provider detection
-      const capabilities =
-        detectCapabilitiesFromLiteLLM(modelInfo) ||
-        detectCapabilitiesFromProvider(model.model_name, modelInfo?.litellm_provider);
+      const capabilities = mergeCapabilities(
+        detectCapabilitiesFromLiteLLM(modelInfo),
+        detectCapabilitiesFromProvider(model.model_name, modelInfo?.litellm_provider),
+      );
 
       return {
         name: model.model_name,
